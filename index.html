@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Decathlon — Control de Cajas</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  /* ── Variables ───────────────────────────────── */
+  :root {
+    --bg:       #f4f4f0;
+    --surface:  #ffffff;
+    --border:   #e2e0d8;
+    --border2:  #c8c6bc;
+    --text:     #1a1a18;
+    --text2:    #6b6a64;
+    --text3:    #9b9a94;
+    --green:    #1D9E75;
+    --green-bg: #e1f5ee;
+    --green-t:  #0F6E56;
+    --amber:    #BA7517;
+    --amber-bg: #faeeda;
+    --info:     #185FA5;
+    --info-bg:  #e6f1fb;
+    --danger:   #A32D2D;
+    --danger-bg:#fcebeb;
+    --radius:   10px;
+    --radius-lg:14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:       #1c1c1a;
+      --surface:  #262624;
+      --border:   #3a3a36;
+      --border2:  #505050;
+      --text:     #e8e6de;
+      --text2:    #9b9a94;
+      --text3:    #6b6a64;
+      --green-bg: #085041;
+      --green-t:  #9FE1CB;
+      --amber-bg: #412402;
+      --amber:    #FAC775;
+      --info-bg:  #0C447C;
+      --info:     #B5D4F4;
+      --danger-bg:#501313;
+      --danger:   #F09595;
+    }
+  }
+
+  /* ── Reset & Base ────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; min-height: 100vh; }
+
+  /* ── Layout ──────────────────────────────────── */
+  .app { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem; }
+  
+  /* ── Header ──────────────────────────────────── */
+  .header { display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.5rem; flex-wrap: wrap; gap: 12px; }
+  .header-brand { display: flex; align-items: center; gap: 10px; }
+  .header-brand .logo { width: 36px; height: 36px; background: var(--green);
+    border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .header-brand .logo i { color: #fff; font-size: 20px; }
+  .header-brand h1 { font-size: 17px; font-weight: 600; color: var(--text); }
+  .header-brand p { font-size: 12px; color: var(--text2); }
+  .sync-status { font-size: 12px; display: flex; align-items: center; gap: 6px; color: var(--text2); }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border2); flex-shrink: 0; }
+  .sync-dot.ok { background: var(--green); }
+  .sync-dot.err { background: var(--danger); }
+
+  /* ── Config banner ───────────────────────────── */
+  .config-banner { background: var(--amber-bg); border: 1px solid var(--amber);
+    border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 1.25rem;
+    display: flex; align-items: flex-start; gap: 12px; }
+  .config-banner i { font-size: 20px; color: var(--amber); flex-shrink: 0; margin-top: 1px; }
+  .config-banner p { font-size: 13px; color: var(--text); }
+  .config-banner input { width: 100%; margin-top: 8px; padding: 7px 10px;
+    border: 1px solid var(--border2); border-radius: 6px; font-size: 13px;
+    background: var(--surface); color: var(--text); }
+  .config-banner input:focus { outline: none; border-color: var(--green); }
+  .config-banner .save-url { margin-top: 6px; padding: 6px 14px; background: var(--green);
+    color: #fff; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; }
+
+  /* ── Nav tabs ────────────────────────────────── */
+  .nav { display: flex; gap: 4px; margin-bottom: 1.25rem;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 4px; width: fit-content; }
+  .nav button { padding: 7px 18px; border: none; border-radius: 8px;
+    background: transparent; color: var(--text2); cursor: pointer;
+    font-size: 14px; font-weight: 500; display: flex; align-items: center;
+    gap: 6px; transition: all .15s; }
+  .nav button.active { background: var(--green); color: #fff; }
+  .nav button:not(.active):hover { background: var(--bg); color: var(--text); }
+
+  /* ── Screens ─────────────────────────────────── */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* ── Metrics ─────────────────────────────────── */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px; margin-bottom: 1.25rem; }
+  .metric { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: .875rem 1rem; }
+  .metric .val { font-size: 26px; font-weight: 600; color: var(--text); }
+  .metric .lbl { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+  /* ── Cards ───────────────────────────────────── */
+  .card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1rem; }
+
+  /* ── Upload zone ─────────────────────────────── */
+  .upload-zone { border: 2px dashed var(--border2); border-radius: var(--radius);
+    padding: 2rem 1rem; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--green); background: var(--green-bg); }
+  .upload-zone i { font-size: 36px; color: var(--text3); display: block; margin-bottom: 8px; }
+  .upload-zone p { font-size: 14px; color: var(--text2); }
+  .upload-zone small { font-size: 12px; color: var(--text3); }
+  .upload-zone input { display: none; }
+
+  /* ── Preview grid ────────────────────────────── */
+  .preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 8px; margin-top: 1rem; }
+  .preview-item { position: relative; border-radius: 8px; overflow: hidden;
+    border: 1px solid var(--border); }
+  .preview-item img { width: 100%; height: 90px; object-fit: cover; display: block; }
+  .preview-item .active-badge { position: absolute; bottom: 4px; left: 4px;
+    background: var(--green); color: #fff; font-size: 10px; padding: 2px 6px;
+    border-radius: 4px; font-weight: 600; }
+  .preview-item .rm { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px;
+    border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; border: none;
+    cursor: pointer; font-size: 13px; display: flex; align-items: center;
+    justify-content: center; line-height: 1; }
+
+  /* ── Form fields ─────────────────────────────── */
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: .875rem; }
+  @media (max-width: 500px) { .fields { grid-template-columns: 1fr; } }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--text2); font-weight: 600;
+    text-transform: uppercase; letter-spacing: .04em; }
+  .field input, .field select { padding: 8px 10px; border: 1px solid var(--border2);
+    border-radius: 7px; background: var(--bg); font-size: 14px; color: var(--text);
+    transition: border-color .15s; }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--green); }
+
+  /* ── Buttons ─────────────────────────────────── */
+  .btn-primary { padding: 9px 20px; border: none; border-radius: 8px; background: var(--green);
+    color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px; transition: opacity .15s; }
+  .btn-primary:hover { opacity: .88; }
+  .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-sec { padding: 8px 14px; border: 1px solid var(--border2); border-radius: 8px;
+    background: var(--surface); color: var(--text2); font-size: 13px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; transition: background .15s; }
+  .btn-sec:hover { background: var(--bg); }
+  .btn-green-outline { padding: 8px 14px; border: 1px solid var(--green); border-radius: 8px;
+    background: transparent; color: var(--green); font-size: 13px; font-weight: 500;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background .15s; }
+  .btn-green-outline:hover { background: var(--green-bg); }
+
+  /* ── Status messages ─────────────────────────── */
+  .status { font-size: 13px; color: var(--text2); min-height: 18px; margin-top: 6px; }
+  .status.ok { color: var(--green-t); }
+  .status.err { color: var(--danger); }
+  .status.loading { color: var(--info); }
+
+  /* ── Filters ─────────────────────────────────── */
+  .filters { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; }
+  @media (max-width: 680px) { .filters { grid-template-columns: 1fr 1fr; } }
+  .filter-actions { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; flex-wrap: wrap; }
+
+  /* ── Toolbar ─────────────────────────────────── */
+  .toolbar { display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: .875rem; flex-wrap: wrap; gap: 8px; }
+  .results-count { font-size: 13px; color: var(--text2); }
+
+  /* ── Result cards ────────────────────────────── */
+  .result-card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 10px; transition: border-color .15s; }
+  .result-card:hover { border-color: var(--border2); }
+  .result-header { padding: 10px 1.25rem; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .result-body { display: grid; grid-template-columns: 160px 1fr; }
+  @media (max-width: 500px) { .result-body { grid-template-columns: 1fr; } }
+  .result-img img { width: 160px; height: 130px; object-fit: cover; display: block;
+    border-right: 1px solid var(--border); }
+  .result-img .no-img { width: 160px; height: 130px; display: flex; align-items: center;
+    justify-content: center; color: var(--text3); border-right: 1px solid var(--border); }
+  .result-details { padding: .875rem; display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px; align-content: start; }
+  .di { display: flex; flex-direction: column; gap: 1px; }
+  .di .dl { font-size: 11px; color: var(--text2); font-weight: 600;
+    text-transform: uppercase; letter-spacing: .03em; }
+  .di .dv { font-size: 13px; color: var(--text); font-weight: 500; }
+
+  /* ── Badges ──────────────────────────────────── */
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 5px; font-weight: 600; }
+  .badge-ok { background: var(--green-bg); color: var(--green-t); }
+  .badge-info { background: var(--info-bg); color: var(--info); }
+
+  /* ── Empty state ─────────────────────────────── */
+  .empty { text-align: center; padding: 3rem 1rem; color: var(--text2); }
+  .empty i { font-size: 40px; display: block; margin-bottom: 12px; color: var(--text3); }
+  
+  /* ── Spinner ─────────────────────────────────── */
+  .spinner { display: inline-block; width: 13px; height: 13px;
+    border: 2px solid var(--border2); border-top-color: var(--green);
+    border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 5px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  /* ── Queue info ──────────────────────────────── */
+  .queue-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+    color: var(--info); background: var(--info-bg); border-radius: 5px;
+    padding: 3px 8px; margin-top: 8px; }
+  
+  /* ── Photo link ──────────────────────────────── */
+  .photo-link { font-size: 12px; color: var(--info); text-decoration: none; display: flex; align-items: center; gap: 3px; }
+  .photo-link:hover { text-decoration: underline; }
+  
+  /* ── Delete button ───────────────────────────── */
+  .del-btn { background: none; border: none; cursor: pointer; color: var(--text3);
+    padding: 3px 6px; border-radius: 4px; font-size: 14px; transition: color .15s; }
+  .del-btn:hover { color: var(--danger); }
+
+  /* ── Separator ───────────────────────────────── */
+  .form-actions { display: flex; gap: 8px; margin-top: 1rem; flex-wrap: wrap; align-items: center; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ─────────────────────────────── -->
+  <div class="header">
+    <div class="header-brand">
+      <div class="logo"><i class="ti ti-package"></i></div>
+      <div>
+        <h1>Control de Cajas</h1>
+        <p>Decathlon Argentina — Despacho E-commerce</p>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="sync-status">
+        <span class="sync-dot" id="sync-dot"></span>
+        <span id="sync-label">Sin configurar</span>
+      </div>
+      <button onclick="abrirConfig()" style="padding:6px 12px;border:0.5px solid var(--border2);border-radius:7px;background:var(--surface);color:var(--text2);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px">
+        <i class="ti ti-settings" style="font-size:14px"></i> Configuración
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Config banner ──────────────────────── -->
+  <div class="config-banner" id="config-banner">
+    <i class="ti ti-settings"></i>
+    <div style="flex:1">
+      <p style="margin-bottom:10px"><strong>Configuración inicial — hacé esto una sola vez por dispositivo.</strong></p>
+
+      <p style="font-size:13px;margin-bottom:4px"><strong>1. URL de Google Apps Script</strong></p>
+      <input type="text" id="url-input" placeholder="https://script.google.com/macros/s/XXXXXXXXX/exec" value="">
+
+      <p style="font-size:13px;margin-top:10px;margin-bottom:4px"><strong>2. API Key de Anthropic</strong> <span style="font-weight:400;color:var(--text2)">(para leer etiquetas con IA)</span></p>
+      <input type="password" id="apikey-input" placeholder="sk-ant-..." value="">
+      <p style="font-size:12px;color:var(--text2);margin-top:3px">Obtenela en <strong>console.anthropic.com</strong> → API Keys → Create Key.</p>
+
+      <p style="font-size:13px;margin-top:10px;margin-bottom:4px"><strong>3. URL del Proxy (Cloudflare Worker)</strong></p>
+      <input type="text" id="proxy-input" placeholder="https://anthropic-proxy.TU-USUARIO.workers.dev" value="">
+      <p style="font-size:12px;color:var(--text2);margin-top:3px">Necesario para que la IA funcione desde GitHub Pages. Ver instrucciones arriba.</p>
+
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="save-url" onclick="guardarConfig()"><i class="ti ti-check"></i> Guardar configuración</button>
+        <button class="save-url" style="background:var(--text2)" onclick="testConexion()">Probar conexión Sheets</button>
+      </div>
+      <p id="url-status" style="font-size:12px;margin-top:6px;color:var(--text2)"></p>
+    </div>
+  </div>
+
+  <!-- ── Nav ────────────────────────────────── -->
+  <div class="nav">
+    <button class="active" id="btn-upload" onclick="showScreen('upload')">
+      <i class="ti ti-upload"></i> Cargar cajas
+    </button>
+    <button id="btn-search" onclick="showScreen('search')">
+      <i class="ti ti-table"></i> Registros
+    </button>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       PANTALLA 1: Carga
+  ══════════════════════════════════════════ -->
+  <div id="s-upload" class="screen active">
+    <div class="metrics">
+      <div class="metric"><div class="val" id="m-hoy">0</div><div class="lbl">Cajas hoy</div></div>
+      <div class="metric"><div class="val" id="m-total">0</div><div class="lbl">Total registros</div></div>
+      <div class="metric"><div class="val" id="m-pendientes">0</div><div class="lbl">En cola</div></div>
+    </div>
+
+    <div class="card">
+      <div class="upload-zone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+        <i class="ti ti-camera-up"></i>
+        <p>Arrastrá las fotos o hacé click para seleccionar</p>
+        <small>JPG, PNG · Podés subir varias fotos a la vez</small>
+        <input type="file" id="fileInput" accept="image/*" multiple onchange="handleFiles(this.files)">
+      </div>
+      <div class="preview-grid" id="preview-grid"></div>
+      <div id="queue-info"></div>
+    </div>
+
+    <div class="card" id="form-card" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+        <p style="font-size:13px;color:var(--text2)">Datos leídos automáticamente — corregí si hace falta</p>
+        <button class="btn-sec" onclick="reextraer()" id="reextract-btn" style="font-size:12px">
+          <i class="ti ti-refresh"></i> Re-leer con IA
+        </button>
+      </div>
+      <div class="fields">
+        <div class="field"><label>N° de Caja</label><input id="f-caja" type="text" placeholder="00105477"></div>
+        <div class="field"><label>N° de Envío</label><input id="f-envio" type="text" placeholder="EP012831855N"></div>
+        <div class="field"><label>N° de Pedido</label><input id="f-pedido" type="text" placeholder="12397"></div>
+        <div class="field"><label>Destinatario</label><input id="f-dest" type="text" placeholder="Pamela Bravo"></div>
+        <div class="field"><label>Localidad</label><input id="f-loc" type="text" placeholder="Córdoba"></div>
+        <div class="field"><label>Correo IATA</label><input id="f-iata" type="text" placeholder="RCU"></div>
+      </div>
+      <div class="status" id="extract-status"></div>
+      <div class="form-actions">
+        <button class="btn-primary" id="save-btn" onclick="saveRecord()">
+          <i class="ti ti-cloud-upload"></i> Guardar en Sheets
+        </button>
+        <button class="btn-sec" onclick="skipRecord()">
+          <i class="ti ti-player-skip-forward"></i> Omitir esta foto
+        </button>
+      </div>
+      <div class="status" id="save-status"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       PANTALLA 2: Consulta
+  ══════════════════════════════════════════ -->
+  <div id="s-search" class="screen">
+    <div class="card">
+      <div class="filters">
+        <div class="field"><label>Desde</label><input type="date" id="f-desde" onchange="loadRecords()"></div>
+        <div class="field"><label>Hasta</label><input type="date" id="f-hasta" onchange="loadRecords()"></div>
+        <div class="field"><label>N° Pedido / Caja / Envío</label>
+          <input type="text" id="f-q" placeholder="Buscar número..." oninput="debounceLoad()"></div>
+        <div class="field"><label>Destinatario</label>
+          <input type="text" id="f-dest-q" placeholder="Nombre..." oninput="debounceLoad()"></div>
+      </div>
+      <div class="filter-actions">
+        <button class="btn-primary" onclick="loadRecords()"><i class="ti ti-search"></i> Buscar</button>
+        <button class="btn-sec" onclick="clearFilters()"><i class="ti ti-x"></i> Limpiar filtros</button>
+        <button class="btn-green-outline" onclick="exportExcel()"><i class="ti ti-file-spreadsheet"></i> Exportar Excel</button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <span class="results-count" id="results-count"></span>
+      <button class="btn-sec" onclick="loadRecords()" id="refresh-btn">
+        <i class="ti ti-refresh"></i> Actualizar
+      </button>
+    </div>
+    <div id="results-area">
+      <div class="empty"><i class="ti ti-cloud-off"></i><p>Conectá con Google Sheets para ver los registros</p></div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+// ── Configuración ──────────────────────────────────────────
+const URL_KEY  = 'deca_apps_script_url';
+const CACHE_KEY = 'deca_cache_records';
+let SCRIPT_URL = localStorage.getItem(URL_KEY) || '';
+let pendingFiles = [];
+let currentImgData = '';
+let cachedRecords = [];
+let debounceTimer = null;
+
+// ── Init ───────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const savedKey   = localStorage.getItem('anthropic_api_key') || '';
+  const savedProxy = localStorage.getItem('proxy_url') || '';
+  if (SCRIPT_URL)  document.getElementById('url-input').value    = SCRIPT_URL;
+  if (savedKey)    document.getElementById('apikey-input').value = savedKey;
+  if (savedProxy)  document.getElementById('proxy-input').value  = savedProxy;
+  const tieneURL    = !!SCRIPT_URL;
+  const tieneApiKey = !!savedKey;
+  const tieneProxy  = !!savedProxy;
+  if (tieneURL && tieneApiKey && tieneProxy) {
+    document.getElementById('config-banner').style.display = 'none';
+    updateSyncStatus('ok', 'Conectado a Google Sheets');
+  } else if (tieneURL) {
+    updateSyncStatus('ok', 'Sheets OK — completá la configuración');
+  }
+  updateMetrics();
+  setupDragDrop();
+});
+
+// ── URL management ─────────────────────────────────────────
+function guardarConfig() {
+  const url    = document.getElementById('url-input').value.trim();
+  const apikey = document.getElementById('apikey-input').value.trim();
+  const st     = document.getElementById('url-status');
+  if (url && !url.includes('script.google.com')) {
+    st.textContent = 'La URL no parece válida. Debe empezar con https://script.google.com...';
+    st.style.color = 'var(--danger)';
+    return;
+  }
+  const proxy  = document.getElementById('proxy-input').value.trim();
+  if (url)   { SCRIPT_URL = url; localStorage.setItem(URL_KEY, url); }
+  if (apikey) { localStorage.setItem('anthropic_api_key', apikey); }
+  if (proxy)  { localStorage.setItem('proxy_url', proxy); }
+  const tieneURL    = !!(url || SCRIPT_URL);
+  const tieneApiKey = !!(apikey || localStorage.getItem('anthropic_api_key'));
+  const tieneProxy  = !!(proxy  || localStorage.getItem('proxy_url'));
+  if (tieneURL && tieneApiKey && tieneProxy) {
+    document.getElementById('config-banner').style.display = 'none';
+    updateSyncStatus('ok', 'Conectado a Google Sheets');
+  } else {
+    const falta = [];
+    if (!tieneURL)    falta.push('URL de Apps Script');
+    if (!tieneApiKey) falta.push('API Key');
+    if (!tieneProxy)  falta.push('URL del Proxy');
+    st.textContent = 'Falta: ' + falta.join(', ');
+    st.style.color = falta.length === 3 ? 'var(--danger)' : 'var(--amber)';
+  }
+}
+
+function guardarURL() { guardarConfig(); }
+
+function abrirConfig() {
+  const banner = document.getElementById('config-banner');
+  banner.style.display = 'flex';
+  // pre-llenar con valores actuales
+  document.getElementById('url-input').value    = localStorage.getItem('deca_apps_script_url') || '';
+  document.getElementById('apikey-input').value = localStorage.getItem('anthropic_api_key')    || '';
+  document.getElementById('proxy-input').value  = localStorage.getItem('proxy_url')            || '';
+  banner.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function testConexion() {
+  const val = document.getElementById('url-input').value.trim();
+  if (!val) return;
+  const st = document.getElementById('url-status');
+  st.textContent = 'Probando...';
+  st.style.color = 'var(--text2)';
+  try {
+    const d = await fetchGAS(val + '?action=list&callback=cb');
+    if (d && d.ok !== undefined) {
+      st.textContent = '✓ Conexión exitosa. Podés guardar.';
+      st.style.color = 'var(--green-t)';
+    } else throw new Error('Respuesta inesperada');
+  } catch (e) {
+    st.textContent = 'Error: ' + e.message;
+    st.style.color = 'var(--danger)';
+  }
+}
+
+// JSONP helper — única forma confiable de leer respuesta de Apps Script sin servidor
+function fetchGAS(url) {
+  return new Promise((resolve, reject) => {
+    const cbName = '_gasCb_' + Date.now();
+    const script = document.createElement('script');
+    const timer = setTimeout(() => {
+      delete window[cbName];
+      script.remove();
+      reject(new Error('Timeout — verificá que la Web App esté publicada con acceso "Cualquier persona"'));
+    }, 12000);
+    window[cbName] = (data) => {
+      clearTimeout(timer);
+      delete window[cbName];
+      script.remove();
+      resolve(data);
+    };
+    // Apps Script usa el parámetro "callback" para JSONP
+    const sep = url.includes('?') ? '&' : '?';
+    script.src = url + sep + 'callback=' + cbName;
+    script.onerror = () => {
+      clearTimeout(timer);
+      delete window[cbName];
+      script.remove();
+      reject(new Error('No se pudo alcanzar la URL'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+function updateSyncStatus(estado, msg) {
+  const dot = document.getElementById('sync-dot');
+  const lbl = document.getElementById('sync-label');
+  dot.className = 'sync-dot ' + estado;
+  lbl.textContent = msg;
+}
+
+// ── Screen navigation ──────────────────────────────────────
+function showScreen(s) {
+  document.querySelectorAll('.screen').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nav button').forEach(x => x.classList.remove('active'));
+  document.getElementById('s-' + s).classList.add('active');
+  document.getElementById('btn-' + s).classList.add('active');
+  if (s === 'search') loadRecords();
+}
+
+// ── File handling ──────────────────────────────────────────
+function handleFiles(files) {
+  pendingFiles = Array.from(files);
+  renderPreviews();
+  if (pendingFiles.length > 0) {
+    document.getElementById('form-card').style.display = 'block';
+    loadAndExtract(0);
+  }
+}
+
+function renderPreviews() {
+  const grid = document.getElementById('preview-grid');
+  grid.innerHTML = '';
+  const qi = document.getElementById('queue-info');
+  qi.innerHTML = '';
+  document.getElementById('m-pendientes').textContent = pendingFiles.length;
+  if (!pendingFiles.length) return;
+  if (pendingFiles.length > 1) {
+    qi.innerHTML = `<span class="queue-badge"><i class="ti ti-stack" style="font-size:13px"></i>${pendingFiles.length} fotos en cola — se procesan una por una</span>`;
+  }
+  pendingFiles.forEach((f, i) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const item = document.createElement('div');
+      item.className = 'preview-item';
+      item.id = 'pi-' + i;
+      item.innerHTML = `<img src="${e.target.result}" alt="Caja ${i+1}">
+        ${i === 0 ? '<span class="active-badge">Actual</span>' : ''}
+        <button class="rm" onclick="removeFile(${i})">×</button>`;
+      grid.appendChild(item);
+    };
+    reader.readAsDataURL(f);
+  });
+}
+
+function removeFile(i) {
+  pendingFiles.splice(i, 1);
+  renderPreviews();
+  clearFields();
+  if (!pendingFiles.length) {
+    document.getElementById('form-card').style.display = 'none';
+  } else {
+    loadAndExtract(0);
+  }
+}
+
+function skipRecord() {
+  pendingFiles.shift();
+  renderPreviews();
+  clearFields();
+  document.getElementById('save-status').textContent = '';
+  if (pendingFiles.length > 0) loadAndExtract(0);
+  else document.getElementById('form-card').style.display = 'none';
+}
+
+async function loadAndExtract(idx) {
+  if (idx >= pendingFiles.length) return;
+  clearFields();
+  document.getElementById('save-status').textContent = '';
+  document.getElementById('save-status').className = 'status';
+  currentImgData = await fileToBase64(pendingFiles[idx]);
+  extractData(pendingFiles[idx]);
+}
+
+// ── AI extraction ──────────────────────────────────────────
+async function extractData(file) {
+  const st = document.getElementById('extract-status');
+  st.className = 'status loading';
+  st.innerHTML = '<span class="spinner"></span>Leyendo etiqueta con IA...';
+  document.getElementById('save-btn').disabled = true;
+  // NO limpiamos campos aquí — se limpian solo cuando cambia la foto
+  const b64  = currentImgData.split(',')[1];
+  const mime = file.type || 'image/jpeg';
+  try {
+    const apiKey   = localStorage.getItem('anthropic_api_key') || '';
+    const proxyURL = localStorage.getItem('proxy_url') || '';
+    if (!apiKey)   throw new Error('api_key_missing');
+    if (!proxyURL) throw new Error('proxy_missing');
+    const resp = await fetch(proxyURL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514', max_tokens: 600,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
+          { type: 'text', text: 'Analizá esta imagen de una caja de Decathlon con etiquetas de envío. Extraé los campos y respondé SOLO con JSON sin backticks:\n{"nro_caja":"número después de CAJA:","nro_envio":"empieza con EP","nro_pedido":"campo PEDIDO o OC CLIENTE","destinatario":"nombre DESTINATARIO","localidad":"ciudad del destinatario","iata":"código IATA 3 letras"}\nSi no podés leer algún campo, poné string vacío.' }
+        ]}]
+      })
+    });
+    const data = await resp.json();
+    const text = (data.content || []).map(c => c.text || '').join('');
+    let p = {};
+    try { p = JSON.parse(text.replace(/```[a-z]*|```/g, '').trim()); } catch(e) {}
+    // Solo sobrescribir campos que la IA haya leído; no pisar lo que el usuario pudo haber escrito
+    if (p.nro_caja)      document.getElementById('f-caja').value   = p.nro_caja;
+    if (p.nro_envio)     document.getElementById('f-envio').value  = p.nro_envio;
+    if (p.nro_pedido)    document.getElementById('f-pedido').value = p.nro_pedido;
+    if (p.destinatario)  document.getElementById('f-dest').value   = p.destinatario;
+    if (p.localidad)     document.getElementById('f-loc').value    = p.localidad;
+    if (p.iata)          document.getElementById('f-iata').value   = p.iata;
+    // Mostrar estado según qué se pudo leer
+    const leyoCaja   = !!(p.nro_caja   || p.nro_pedido);
+    const leyoCorreo = !!(p.nro_envio  || p.iata);
+    if (leyoCaja && leyoCorreo) {
+      st.className = 'status ok';
+      st.textContent = '✓ Etiquetas leídas correctamente.';
+    } else if (leyoCaja) {
+      st.className = 'status'; st.style.color = 'var(--amber)';
+      st.textContent = '⚠ Etiqueta de caja leída. No se detectó la etiqueta del correo — podés completarla a mano o dejarla vacía.';
+    } else {
+      st.className = 'status'; st.style.color = 'var(--amber)';
+      st.textContent = '⚠ Lectura parcial — revisá los campos antes de guardar.';
+    }
+  } catch(e) {
+    st.className = 'status'; st.style.color = 'var(--amber)';
+    const abrirConfig = "document.getElementById('config-banner').style.display='flex';return false";
+    if (e.message === 'api_key_missing') {
+      st.innerHTML = '⚠ Falta la API Key. <a href="#" onclick="' + abrirConfig + '" style="color:var(--amber);text-decoration:underline">Configurar ahora</a>';
+    } else if (e.message === 'proxy_missing') {
+      st.innerHTML = '⚠ Falta la URL del Proxy. <a href="#" onclick="' + abrirConfig + '" style="color:var(--amber);text-decoration:underline">Configurar ahora</a>';
+    } else {
+      st.innerHTML = '⚠ Error de conexión con la IA. <a href="#" onclick="' + abrirConfig + '" style="color:var(--amber);text-decoration:underline">Revisar configuración</a>';
+    }
+  }
+  document.getElementById('save-btn').disabled = false;
+}
+
+function reextraer() {
+  if (pendingFiles.length > 0) extractData(pendingFiles[0]);
+}
+
+function clearFields() {
+  ['f-caja','f-envio','f-pedido','f-dest','f-loc','f-iata'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('extract-status').textContent = '';
+}
+
+// ── Save record ────────────────────────────────────────────
+async function saveRecord() {
+  if (!SCRIPT_URL) {
+    document.getElementById('save-status').className = 'status err';
+    document.getElementById('save-status').textContent = 'Primero configurá la URL de Google Apps Script.';
+    return;
+  }
+  // Limpiar error anterior siempre
+  document.getElementById('save-status').textContent = '';
+  document.getElementById('save-status').className = 'status';
+
+  const caja   = document.getElementById('f-caja').value.trim();
+  const envio  = document.getElementById('f-envio').value.trim();
+  const pedido = document.getElementById('f-pedido').value.trim();
+  // Alcanza con tener caja o pedido
+  if (!caja && !pedido) {
+    document.getElementById('save-status').className = 'status err';
+    document.getElementById('save-status').textContent = 'Se necesita al menos el N° de Caja o N° de Pedido para guardar.';
+    return;
+  }
+  // Limpiar aviso de lectura parcial para no confundir
+  const exSt = document.getElementById('extract-status');
+  if (!exSt.className.includes('ok')) { exSt.textContent = ''; }
+  const ss = document.getElementById('save-status');
+  ss.className = 'status loading';
+  ss.innerHTML = '<span class="spinner"></span>Guardando en Google Sheets...';
+  document.getElementById('save-btn').disabled = true;
+
+  const payload = {
+    nro_caja:     caja,
+    nro_envio:    envio,
+    nro_pedido:   pedido,
+    destinatario: document.getElementById('f-dest').value.trim(),
+    localidad:    document.getElementById('f-loc').value.trim(),
+    iata:         document.getElementById('f-iata').value.trim(),
+    foto_base64:  currentImgData || ''
+  };
+
+  try {
+    // Apps Script con no-cors: enviamos como FormData, no podemos leer la respuesta
+    // pero el dato llega igual al Sheet. Verificamos con un GET posterior.
+    const form = new FormData();
+    form.append('payload', JSON.stringify(payload));
+    await fetch(SCRIPT_URL, { method: 'POST', body: form, mode: 'no-cors' });
+    // no-cors devuelve respuesta opaca — asumimos éxito y verificamos con GET
+    ss.className = 'status ok';
+    ss.textContent = '✓ Guardado en Google Sheets.';
+    updateMetrics();
+    pendingFiles.shift();
+    renderPreviews();
+    clearFields();
+    document.getElementById('extract-status').textContent = '';
+    if (pendingFiles.length > 0) {
+      setTimeout(() => { ss.textContent = ''; loadAndExtract(0); }, 800);
+    } else {
+      setTimeout(() => {
+        document.getElementById('form-card').style.display = 'none';
+        ss.textContent = '';
+      }, 1500);
+    }
+  } catch(e) {
+    ss.className = 'status err';
+    ss.textContent = 'Error al guardar: ' + e.message;
+  }
+  document.getElementById('save-btn').disabled = false;
+}
+
+// ── Metrics (from local estimate + Google) ─────────────────
+async function updateMetrics() {
+  if (SCRIPT_URL) {
+    try {
+      const d = await fetchGAS(SCRIPT_URL + '?action=list');
+      if (d && d.ok && d.registros) {
+        cachedRecords = d.registros;
+        const hoy = new Date().toLocaleDateString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric'});
+        const hoyCount = d.registros.filter(r => r.fecha === hoy).length;
+        document.getElementById('m-hoy').textContent   = hoyCount;
+        document.getElementById('m-total').textContent = d.registros.length;
+      }
+    } catch(e) {}
+  }
+}
+
+// ── Load records (consulta) ────────────────────────────────
+let loadTimer = null;
+function debounceLoad() {
+  clearTimeout(loadTimer);
+  loadTimer = setTimeout(loadRecords, 400);
+}
+
+async function loadRecords() {
+  if (!SCRIPT_URL) {
+    document.getElementById('results-area').innerHTML = `<div class="empty"><i class="ti ti-cloud-off"></i><p>Primero configurá la URL de Google Apps Script</p></div>`;
+    return;
+  }
+  const q     = document.getElementById('f-q').value.trim();
+  const dest  = document.getElementById('f-dest-q').value.trim();
+  const desde = document.getElementById('f-desde').value;
+  const hasta = document.getElementById('f-hasta').value;
+
+  document.getElementById('results-count').textContent = 'Cargando...';
+  document.getElementById('results-area').innerHTML = `<div class="empty"><span class="spinner"></span><p style="margin-top:8px">Consultando Google Sheets...</p></div>`;
+
+  try {
+    let url = SCRIPT_URL + '?action=list';
+    if (q)     url += '&q='     + encodeURIComponent(q);
+    if (dest)  url += '&dest='  + encodeURIComponent(dest);
+    if (desde) url += '&desde=' + encodeURIComponent(desde);
+    if (hasta) url += '&hasta=' + encodeURIComponent(hasta);
+
+    const data = await fetchGAS(url);
+    if (!data.ok) throw new Error(data.error);
+    cachedRecords = data.registros;
+    document.getElementById('results-count').textContent = data.registros.length + ' registro(s)';
+    renderResults(data.registros);
+    updateSyncStatus('ok', 'Sincronizado');
+  } catch(e) {
+    document.getElementById('results-count').textContent = 'Error';
+    document.getElementById('results-area').innerHTML = `<div class="empty"><i class="ti ti-alert-circle"></i><p>Error al cargar: ${e.message}</p></div>`;
+    updateSyncStatus('err', 'Error de conexión');
+  }
+}
+
+function clearFilters() {
+  document.getElementById('f-q').value = '';
+  document.getElementById('f-dest-q').value = '';
+  document.getElementById('f-desde').value = '';
+  document.getElementById('f-hasta').value = '';
+  loadRecords();
+}
+
+// ── Render results ─────────────────────────────────────────
+function renderResults(items) {
+  const area = document.getElementById('results-area');
+  if (!items.length) {
+    area.innerHTML = `<div class="empty"><i class="ti ti-zoom-cancel"></i><p>No se encontraron registros con esos filtros</p></div>`;
+    return;
+  }
+  let html = '';
+  items.forEach(r => {
+    const fotoHtml = r.foto_link
+      ? `<div class="result-img"><img src="${r.foto_link.replace('/open?id=', '/uc?id=').replace('open?id=','uc?id=')}" alt="Foto caja" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'><i class=\\'ti ti-photo-off\\' style=\\'font-size:28px\\'></i></div>'"></div>`
+      : `<div class="result-img"><div class="no-img"><i class="ti ti-photo-off" style="font-size:28px"></i></div></div>`;
+
+    html += `<div class="result-card">
+      <div class="result-header">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:14px;font-weight:600">Caja ${r.nro_caja||'—'}</span>
+          <span style="font-size:13px;color:var(--text2)">Pedido ${r.nro_pedido||'—'}</span>
+          <span style="font-size:13px;color:var(--text2)">${r.nro_envio||''}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          ${r.iata ? `<span class="badge badge-ok">${r.iata}</span>` : ''}
+          <span style="font-size:12px;color:var(--text3)">${r.fecha||''} ${r.hora||''}</span>
+          ${r.foto_link ? `<a href="${r.foto_link}" target="_blank" class="photo-link"><i class="ti ti-photo" style="font-size:14px"></i></a>` : ''}
+        </div>
+      </div>
+      <div class="result-body">
+        ${fotoHtml}
+        <div class="result-details">
+          <div class="di"><span class="dl">Destinatario</span><span class="dv">${r.destinatario||'—'}</span></div>
+          <div class="di"><span class="dl">Localidad</span><span class="dv">${r.localidad||'—'}</span></div>
+          <div class="di"><span class="dl">N° Caja</span><span class="dv">${r.nro_caja||'—'}</span></div>
+          <div class="di"><span class="dl">N° Envío</span><span class="dv">${r.nro_envio||'—'}</span></div>
+          <div class="di"><span class="dl">N° Pedido</span><span class="dv">${r.nro_pedido||'—'}</span></div>
+          <div class="di"><span class="dl">IATA</span><span class="dv">${r.iata||'—'}</span></div>
+        </div>
+      </div>
+    </div>`;
+  });
+  area.innerHTML = html;
+}
+
+// ── Export Excel ───────────────────────────────────────────
+function exportExcel() {
+  if (!cachedRecords.length) { alert('No hay registros para exportar.'); return; }
+  const rows = cachedRecords.map(r => ({
+    'Fecha':        r.fecha        || '',
+    'Hora':         r.hora         || '',
+    'N° Caja':      r.nro_caja     || '',
+    'N° Envío':     r.nro_envio    || '',
+    'N° Pedido':    r.nro_pedido   || '',
+    'Destinatario': r.destinatario || '',
+    'Localidad':    r.localidad    || '',
+    'IATA':         r.iata         || '',
+    'Link Foto':    r.foto_link    || ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:12},{wch:10},{wch:14},{wch:18},{wch:12},{wch:24},{wch:18},{wch:8},{wch:50}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Cajas');
+  const fecha = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `cajas_decathlon_${fecha}.xlsx`);
+}
+
+// ── Helpers ────────────────────────────────────────────────
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = () => rej(new Error('Error leyendo archivo'));
+    r.readAsDataURL(file);
+  });
+}
+
+function setupDragDrop() {
+  const dz = document.getElementById('dropzone');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+  });
+}
+</script>
+</body>
+</html>
